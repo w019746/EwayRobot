@@ -7,6 +7,7 @@
 #include <pcl/filters/voxel_grid.h>
 
 ros::Publisher pub;
+ros::Publisher pub2;
 
 void cloud_cb (const pcl::PCLPointCloud2ConstPtr& cloud)
 {

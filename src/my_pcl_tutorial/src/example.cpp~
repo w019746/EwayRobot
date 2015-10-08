@@ -15,7 +15,7 @@ void cloud_cb (const pcl::PCLPointCloud2ConstPtr& cloud)
   // Perform the actual filtering
   pcl::VoxelGrid<pcl::PCLPointCloud2> sor;
   sor.setInputCloud (cloud);
-  sor.setLeafSize (0.01, 0.01, 0.01);
+  sor.setLeafSize (0.02, 0.02, 0.02);
   sor.filter (cloud_filtered);
 
   // Publish the data
