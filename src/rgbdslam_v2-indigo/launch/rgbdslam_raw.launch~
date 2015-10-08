@@ -1,0 +1,54 @@
+<!-- This file shows the most important parameters in their default settings,
+     to make them easily available for beginners.
+
+     The openni driver has to be started seperately, e.g. with "roslaunch openni_launch openni.launch" -->
+<launch>
+  <node pkg="rgbdslam" type="rgbdslam" name="rgbdslam" cwd="node" required="true" output="screen"> 
+    <!-- Input data settings-->
+    <param name="config/topic_image_mono"              value="/camera/rgb/image_color"/> 
+    <param name="config/topic_image_depth"             value="/camera/depth_registered/image_raw"/>
+    <param name="config/topic_points"                  value=""/> <!--if empty, poincloud will be reconstructed from image and depth -->
+
+    <!-- These are the default values of some important parameters -->
+    <param name="config/feature_extractor_type"        value="SURF"/><!-- also available: SIFT, SIFTGPU, SURF, SURF128 (extended SURF), ORB. -->
+    <param name="config/feature_detector_type"         value="SURF"/><!-- also available: SIFT, SURF, GFTT (good features to track), ORB. -->
+	<param name="config/matcher_type"                          value="FLANN"/>
+    <param name="config/detector_grid_resolution"      value="3"/><!-- detect on a 3x3 grid (to spread ORB keypoints and parallelize SIFT and SURF) -->
+    <param name="config/max_keypoints"                 value="600"/><!-- Extract no more than this many keypoints -->
+    <param name="config/max_matches"                   value="300"/><!-- Keep the best n matches (important for ORB to set lower than max_keypoints) -->
+	<param name="config/min_matches"                   value="40"/>
+
+    <param name="config/min_sampled_candidates"        value="4"/><!-- Frame-to-frame comparisons to random frames (big loop closures) -->
+    <param name="config/predecessor_candidates"        value="4"/><!-- Frame-to-frame comparisons to sequential frames-->
+    <param name="config/neighbor_candidates"           value="4"/><!-- Frame-to-frame comparisons to graph neighbor frames-->
+    <param name="config/cloud_creation_skip_step"      value="2"/><!-- subsample the images' pixels (in both, width and height), when creating the cloud (and therefore reduce memory consumption) -->
+
+    
+    <param name="config/cloud_display_type"            value="POINTS"/><!-- Show pointclouds as points (as opposed to TRIANGLE_STRIP) -->
+    <param name="config/pose_relative_to"              value="largest_loop"/><!-- This option allows to choose which frame(s) should be set fixed during optimization: first, previous, inaffected, largest_loop. The latter sets all frames as fixed to which no transformation has been found. -->
+    <param name="config/backend_solver"                value="pcg"/><!-- pcg is faster and good for continuous online optimization, cholmod and csparse are better for offline optimization (without good initial guess)-->
+    <param name="config/optimizer_skip_step"           value="1"/><!-- optimize only every n-th frame -->
+
+	<!-- ODOMETRY RELATED -->
+	<param name="config/odometry_tpc"                  value="/odom"/><!-- should be of type nav_msgs/Odometry -->
+	<param name="config/use_robot_odom"                value="true"/>
+	<param name="config/use_robot_odom_only"                value="false"/>
+	<param name="config/odom_frame_name"               value="/odom_frame"/><!-- the fixed coordinate frame according to odometry -->
+	<param name="config/base_frame_name"               value="/base_frame"/><!-- the robot's position, era base_link padrao -->
+	<param name="config/odometry_information_factor"   value="1e4"/><!-- weight for the odometry edges in the pose graph -->
+	<!--param name="config/constrain_2d"                  value="true"/-->
+
+	<!--param name="config/keep_all_nodes"                value="true"/--><!-- assume zero motion if no motion could be found and continue -->
+
+	<param name="config/fixed_camera"                  value="true"/> <!--is the kinect fixed with respect to base, or can it be moved (false makes sense only if transform betw. base_frame and openni_camera is sent via tf)-->
+	<param name="config/use_odom_for_prediction"               value="true"/>
+
+	<param name="config/maximum_depth"                 value="5"/>
+	<param name="config/nn_distance_ratio"                 value="0.95"/>
+	<param name="config/keep_good_nodes"                 value="false"/>
+	<param name="config/use_icp"                 value="true"/>
+	<param name="config/g2o_transformation_refinement"                 value="0"/>
+	<param name="config/ransac_termination_inlier_pct"	value="60"/>
+	<param name="config/ransac_iterations"	value="100"/>
+  </node>
+</launch>

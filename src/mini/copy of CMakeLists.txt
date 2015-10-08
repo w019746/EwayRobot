@@ -1,0 +1,52 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(mini)
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  rospy
+  std_msgs
+  message_generation
+)
+
+add_message_files(
+	FILES
+	controlOutput.msg
+  naviLoc.msg
+)
+
+generate_messages(
+ DEPENDENCIES
+ std_msgs
+)
+
+catkin_package(
+	CATKIN_DEPENDS message_runtime
+)
+
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)
+link_directories(${catkin_LIBRARY_DIRS})
+
+set(CMAKE_PREFIX_PATH "/opt/Qt5.5.0/5.5/gcc_64")
+SET(CMAKE_AUTOMOC ON)
+SET(CMAKE_INCLUDE_CURRENT_DIR ON)
+find_package(Qt5SerialPort)
+include_directories(${Qt5SerialPort_INCLUDE_DIRS})
+add_definitions(${Qt5SerialPort_DEFINITIONS})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${Qt5SerialPort_EXECUTABLE_COMPILE_FLAGS}")
+
+catkin_package(
+DEPENDS
+QtCore
+)
+
+add_executable(control src/control.cpp)
+target_link_libraries(control ${catkin_LIBRARIES})
+add_dependencies(control mini_generate_messages_cpp)
+
+
+add_executable(nav src/nav.cpp)
+target_link_libraries(nav ${catkin_LIBRARIES} ${Qt5SerialPort_LIBRARIES})
+add_dependencies(nav mini_generate_messages_cpp)
+
