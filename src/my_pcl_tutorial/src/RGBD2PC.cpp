@@ -1,6 +1,8 @@
 #include <iostream>
 #include <string>
 #include <ros/ros.h>
+#include <tf/transform_listener.h>
+#include <tf_conversions/tf_eigen.h>
 #include "mini/naviLoc.h"
 // PCL specific includes
 #include <sensor_msgs/PointCloud2.h>
@@ -79,11 +81,12 @@ private:
   bool preLoadCloud;
   pcl::PointCloud<PointType>::Ptr cloud_all_ptr;
   pcl::PointCloud<PointType>::Ptr cloud_now_ptr;
-  Eigen::Matrix4f transform;
+  Eigen::Matrix4f transOdom, transOffset;
   pcl::IterativeClosestPoint<PointType, PointType> icp;
   const static int icpFramesToResetTarget = 10000;
   int icpCount;
   bool initialized;
+
   void downSamplePoints(pcl::PointCloud<PointType>::Ptr cloud_ptr, 
                         const double& vx=0.02, const double& vy=0.02, const double& vz=0.02);
   void updateRGBAWithHeight(pcl::PointCloud<PointType>::Ptr cloud_ptr,
@@ -96,13 +99,14 @@ public:
   MyPointCloud();
   MyPointCloud(std::string s);
   void updateTrans(const double& x, const double& y, const double& theta);
+  void updateTrans(const Eigen::Matrix4f& _trans);
   void updatePoints(pcl::PointCloud<PointType>::Ptr _cloud);
   void visualization();
 };
 
 ros::Publisher pub;
 RGBD rgbd_image;
-MyPointCloud myPointCloud("2015-08-27-21-11-17_pcd.pcd");
+MyPointCloud myPointCloud("data/2015-08-27-21-11-17_pcd.pcd");
 
 RGBD::RGBD()
 {
@@ -296,7 +300,8 @@ void MyPointCloud::removeGroundPoints(pcl::PointCloud<PointType>::Ptr cloud_ptr,
 
 void MyPointCloud::init()
 {
-  transform = Eigen::Matrix4f::Identity();
+  transOdom = Eigen::Matrix4f::Identity();
+  transOffset = Eigen::Matrix4f::Identity();  
   pcl::PointCloud<PointType>::Ptr tmp_cloud(new pcl::PointCloud<PointType>);  
   cloud_all_ptr = tmp_cloud;
   icpCount = 0;
@@ -309,6 +314,9 @@ void MyPointCloud::loadPCD(std::string s)
   if (pcl::io::loadPCDFile<PointType>(s,*cloud_all_ptr)!=-1)
   {
     std::cout << "PCD Load Succeed: Size " << cloud_all_ptr->width*cloud_all_ptr->height << std::endl;
+    downSamplePoints(cloud_all_ptr);
+    removeGroundPoints(cloud_all_ptr);
+    updateRGBAWithHeight(cloud_all_ptr);
     preLoadCloud = true;
   }else
     std::cout <<"PCD Load Failed" << std::endl;
@@ -323,7 +331,7 @@ MyPointCloud::MyPointCloud(std::string s)
 {
   init();
   loadPCD(s);
-  boost::thread thrd(boost::bind(&MyPointCloud::visualization,this));
+  boost::thread thrd1(boost::bind(&MyPointCloud::visualization,this));
 }
 
 void MyPointCloud::visualization()
@@ -339,7 +347,7 @@ void MyPointCloud::visualization()
   pcl::PointCloud<PointType>::Ptr cloud_view_all_ptr(new pcl::PointCloud<PointType>);
   pcl::PointCloud<PointType>::Ptr cloud_view_now_ptr(new pcl::PointCloud<PointType>);
   Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
-  transform(2,2) = 0;
+  //transform(2,2) = 0;
 
   pcl::transformPointCloud(*cloud_all_ptr, *cloud_view_all_ptr, transform);
   
@@ -347,36 +355,40 @@ void MyPointCloud::visualization()
 
   while (!viewer.wasStopped())
   {
-    pcl::transformPointCloud(*cloud_now_ptr, *cloud_view_now_ptr, transform);
+
+    Eigen::Matrix4f transform_view = transform* this->transOffset * this->transOdom;
+    //pcl::transformPointCloud(*cloud_now_ptr, *cloud_view_now_ptr, transform * this->transOffset * this->transOdom);
+    pcl::transformPointCloud(*cloud_now_ptr, *cloud_view_now_ptr, transform_view);
+
     if (!visualInitialed)
     {
-
-
       //pcl::visualization::PointCloudColorHandlerCustom<PointType> now_color_handler (cloud_view_now_ptr, 230, 20, 20);
 
       viewer.addPointCloud (cloud_view_all_ptr, "original_cloud");
       viewer.addPointCloud (cloud_view_now_ptr, "tranformed_cloud");
-      Eigen::Transform<float, 3, Eigen::Affine> t_src2w (this->transform);
+      Eigen::Transform<float, 3, Eigen::Affine> t_src2w (this->transOdom);
       viewer.addCoordinateSystem (0.2, t_src2w);
-      viewer.setBackgroundColor(1.0, 1.0, 1.0, 0);
-      viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "original_cloud");
+      viewer.setBackgroundColor(0.1, 0.1, 0.1, 0);
+      viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "original_cloud");
       viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "tranformed_cloud");
       visualInitialed = true;
     }
+    
     else
     {
       if (!preLoadCloud)
         viewer.updatePointCloud (cloud_view_all_ptr, "original_cloud");
       viewer.updatePointCloud (cloud_view_now_ptr, "tranformed_cloud");    
       
-      if (this->transform != preTransform)
+      if (this->transOdom != preTransform)
       {
-        preTransform = this->transform;
-        Eigen::Transform<float, 3, Eigen::Affine> t_src2w (this->transform);
+        preTransform = this->transOdom;
+        Eigen::Transform<float, 3, Eigen::Affine> t_src2w (this->transOdom);
         viewer.addCoordinateSystem (0.2, t_src2w);
       }
       viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "tranformed_cloud");
     }
+    //std::cout << count++ << std::endl;
     viewer.spinOnce ();
   }
 }
@@ -384,51 +396,35 @@ void MyPointCloud::visualization()
 
 void MyPointCloud::updateTrans(const double& x, const double& y, const double& theta)
 {
-  transform(0,0) = cos(theta);
-  transform(0,1) = -sin(theta);
-  transform(1,0) = sin(theta);
-  transform(1,1) = cos(theta);
-  transform(0,3) = x;
-  transform(1,3) = y;
+  transOdom(0,0) = cos(theta);
+  transOdom(0,1) = -sin(theta);
+  transOdom(1,0) = sin(theta);
+  transOdom(1,1) = cos(theta);
+  transOdom(0,3) = x;
+  transOdom(1,3) = y;
+}
+
+void MyPointCloud::updateTrans(const Eigen::Matrix4f& _trans)
+{
+  transOdom = _trans;
 }
 
 void MyPointCloud::updatePoints(pcl::PointCloud<PointType>::Ptr _cloud)
 {
-  //std::cout << cloud_all_ptr->width << std::endl;
+  downSamplePoints(_cloud);
+  removeGroundPoints(_cloud);
+  updateRGBAWithHeight(_cloud,-100, -100.1);
+  cloud_now_ptr = _cloud;
 
-  //cloud_now_ptr = _cloud;
-  
+  /*
   // transform cloud_now
   pcl::PointCloud<PointType>::Ptr cloud_transformed_ptr(new pcl::PointCloud<PointType>());
+  Eigen::Matrix4f transform = transOdom*transOffset;
   pcl::transformPointCloud(*_cloud, *cloud_transformed_ptr, transform);
 
-
-  //ROS_INFO("%d   ", cloud_transformed_ptr->width);
   downSamplePoints(cloud_transformed_ptr);
   removeGroundPoints(cloud_transformed_ptr);
-  //{
-  //  Eigen::Matrix4f transformToGround = Eigen::Matrix4f::Identity();
-  //  transform(2,2) = 0;
-  //  pcl::PointCloud<PointType>::Ptr tmp_ptr(new pcl::PointCloud<PointType>);
-  //  pcl::transformPointCloud(*cloud_transformed_ptr, *tmp_ptr, transform);    
-  //  cloud_transformed_ptr = tmp_ptr;
-  //}
 
-  //updateRGBAWithHeight(cloud_transformed_ptr);
-  //ROS_INFO("%d ", cloud_transformed_ptr->width);
-
-
-  // remove outlier_now
-  /*
-  pcl::PointCloud<PointType> tmpCloud;
-  pcl::StatisticalOutlierRemoval<PointType> sore;
-  sore.setInputCloud (cloud_transformed_ptr);
-  sore.setMeanK (10);
-  sore.setStddevMulThresh (1.0);
-  sore.filter (tmpCloud);
-  ROS_INFO("%d %d", cloud_transformed_ptr->width, tmpCloud.width);
-  *cloud_transformed_ptr = tmpCloud;
-  */
 
   // icp
   icpCount++;
@@ -448,11 +444,11 @@ void MyPointCloud::updatePoints(pcl::PointCloud<PointType>::Ptr _cloud)
     pcl::PointCloud<PointType> cloud_registered;
     icp.align(cloud_registered);
 
-    Eigen::Matrix4f transOffset = icp.getFinalTransformation();
-    transform = transOffset*transform;
+    Eigen::Matrix4f _transOffset = icp.getFinalTransformation();
+    transOffset = _transOffset*transOffset;
     
     std::cout<< "has convergerd: " << icp.hasConverged() << "score: " << icp.getFitnessScore() << std::endl;
-    std::cout<<transform<<std::endl;
+    std::cout<<transOffset<<std::endl;
     //std::cout<<icp.getFinalTransformation()<<std::endl;
     *cloud_transformed_ptr = cloud_registered;
     
@@ -465,16 +461,10 @@ void MyPointCloud::updatePoints(pcl::PointCloud<PointType>::Ptr _cloud)
     icp.setInputTarget(cloud_all_ptr);
   }
 
-
   if (!preLoadCloud || !initialized)
   {    
     downSamplePoints(cloud_all_ptr);//,0.1,0.1,0.1);
     removeGroundPoints(cloud_all_ptr);
-    //Eigen::Matrix4f transformToGround = Eigen::Matrix4f::Identity();
-    //transform(2,2) = 0;
-    //pcl::PointCloud<PointType>::Ptr tmp_ptr(new pcl::PointCloud<PointType>);    
-    //pcl::transformPointCloud(*cloud_all_ptr, *tmp_ptr, transform);    
-    //cloud_all_ptr = tmp_ptr;
   }
 
 
@@ -484,29 +474,8 @@ void MyPointCloud::updatePoints(pcl::PointCloud<PointType>::Ptr _cloud)
   cloud_now_ptr = cloud_transformed_ptr;
 
   //ROS_INFO("%d", cloud_all_ptr->width);
-
-
-  initialized = true;
-  /*
-  if (!visualInitialed)
-  {
-    viewer.addPointCloud (cloud_all_ptr, "original_cloud");
-    viewer.addPointCloud (cloud_transformed_ptr, "tranformed_cloud");
-    viewer.addCoordinateSystem ();
-    viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Setting background to a dark grey
-    viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "original_cloud");
-    viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "tranformed_cloud");
-    visualInitialed = true;
-  }
-  else
-  {
-    if (!preLoadCloud)
-      viewer.updatePointCloud (cloud_all_ptr, "original_cloud");
-    viewer.updatePointCloud (cloud_transformed_ptr, "tranformed_cloud");    
-  }
-  viewer.spinOnce ();
   */
-
+  initialized = true;
 }
 
 void init()
@@ -546,10 +515,53 @@ void info_cb(const sensor_msgs::CameraInfoConstPtr& info_msg)
   //ROS_INFO("info: %d.%d",info_msg->header.stamp.sec, info_msg->header.stamp.nsec);
 }
 
-void nav_cb(const mini::naviLoc::ConstPtr& msg)
-{
+//void nav_cb(const mini::naviLoc::ConstPtr& msg)
+//{
   //ROS_INFO("%f,%f,%f",msg->x,msg->y,msg->theta);
   //myPointCloud.updateTrans(msg->x,msg->y,msg->theta);
+//}
+
+void listeningTf()
+{
+  int count = 0;
+  tf::TransformListener listener;
+  ros::Rate rate(100.0);
+  while (1){
+    tf::StampedTransform transform;
+    try{
+      ros::Time now = ros::Time::now();
+      listener.waitForTransform("/odom_frame", "/base_frame",
+                              ros::Time(0), ros::Duration(3.0));
+      listener.lookupTransform("/odom_frame", "/base_frame",
+                             ros::Time(0), transform);
+    }
+    catch (tf::TransformException &ex) {
+      ROS_ERROR("%s",ex.what());
+      ros::Duration(1.0).sleep();
+      continue;
+    }
+    //std::cout << ++count << std::endl;
+    
+    Eigen::Affine3d matrix;
+    tf::transformTFToEigen (transform, matrix);
+    Eigen::Matrix4d transEigenD = matrix.matrix();
+    Eigen::Matrix4f transEigenF;
+    for (int i=0; i<4; i++)
+      for (int j=0; j<4; j++)
+        transEigenF(i,j) = transEigenD(i,j);
+    Eigen::Matrix4f refineM = transEigenF;
+    //refineM(0,0) = 0;
+    //refineM(0,1) = -1;
+    //refineM(1,0) = 1;
+    //refineM(1,1) = 0;
+    refineM(0,3) = transEigenF(1,3);
+    refineM(1,3) = -transEigenF(0,3);
+
+
+    myPointCloud.updateTrans(refineM);
+
+    rate.sleep();
+  }
 }
 
 int main(int argc, char** argv)
@@ -564,10 +576,12 @@ int main(int argc, char** argv)
   ros::Subscriber depth_sub = nh.subscribe<sensor_msgs::Image> ("/camera/depth_registered/image_raw", 1, depth_cb);
   ros::Subscriber image_sub = nh.subscribe<sensor_msgs::Image> ("/camera/rgb/image_color", 1, image_cb);
   ros::Subscriber info_sub = nh.subscribe<sensor_msgs::CameraInfo> ("/camera/rgb/camera_info", 1, info_cb);
-  ros::Subscriber nav_sub = nh.subscribe<mini::naviLoc> ("navmsg", 1, nav_cb);
+  //ros::Subscriber nav_sub = nh.subscribe<mini::naviLoc> ("navmsg", 1, nav_cb);
 
   // Create a ROS publisher for the output point cloud
   pub = nh.advertise<sensor_msgs::PointCloud2> ("/down_sampled_cloud", 1);
+
+  boost::thread thrdListeningTf(&listeningTf);
 
   ros::spin();
 

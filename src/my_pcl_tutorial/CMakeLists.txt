@@ -7,6 +7,7 @@ project(my_pcl_tutorial)
 find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
+  tf_conversions
   roscpp
   cv_bridge
   std_msgs
