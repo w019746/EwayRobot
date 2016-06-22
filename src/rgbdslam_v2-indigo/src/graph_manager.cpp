@@ -637,22 +637,14 @@ bool GraphManager::nodeComparisons(Node* new_node,
        ((!found_trafo && keep_anyway) || 
         (!predecessor_matched && time_delta_sec < 0.1))) //FIXME: Add parameter for constant position assumption and time_delta
     { 
-      Node* prev_frame = graph_[graph_.size()-1];
-	  tf::Transform tfTransDiff(prev_frame->getOdomTransform()*new_node->getOdomTransform().inverse());
-      FILE* fp = fopen("/home/haha/catkin_ws/templog.txt","a");
-      fprintf(fp,"%f,%f,%f,%f\n",tfTransDiff.getOrigin().getX(),tfTransDiff.getOrigin().getY(),tfTransDiff.getOrigin().getZ(),tfTransDiff.getRotation().getAngle());
-      fclose(fp);
-
       LoadedEdge3D odom_edge;
+
       odom_edge.id1 = sequentially_previous_id;
       odom_edge.id2 = new_node->id_;
-      if(sequentially_previous_id==0)
-          odom_edge.transform.setIdentity();
-      else
-          odom_edge.transform = tf2G2O(tfTransDiff);
+      odom_edge.transform.setIdentity();
       curr_motion_estimate = eigenTF2QMatrix(odom_edge.transform);
-      //odom_edge.informationMatrix = Eigen::Matrix<double,6,6>::Zero(); 
-      //ROS_WARN("No valid (sequential) transformation between %d and %d: Using constant position assumption.", odom_edge.id1, odom_edge.id2);
+      odom_edge.informationMatrix = Eigen::Matrix<double,6,6>::Zero(); 
+      ROS_WARN("No valid (sequential) transformation between %d and %d: Using constant position assumption.", odom_edge.id1, odom_edge.id2);
       odom_edge.informationMatrix = Eigen::Matrix<double,6,6>::Identity() / time_delta_sec;//e-9; 
       addEdgeToG2O(odom_edge,graph_[sequentially_previous_id],new_node, true,true, curr_motion_estimate);
       graph_[new_node->id_] = new_node; //Needs to be added
@@ -660,7 +652,6 @@ bool GraphManager::nodeComparisons(Node* new_node,
       MatchingResult mr;
       mr.edge = odom_edge;
       curr_best_result_ = mr;
-	  
     }
 
     return cam_cam_edges_.size() > num_edges_before;

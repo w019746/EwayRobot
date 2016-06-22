@@ -74,3 +74,7 @@ add_executable(SLAM_offline src/SLAM_offline.cpp)
 target_link_libraries(SLAM_offline ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_dependencies(SLAM_offline mini_generate_messages_cpp)
 
+add_executable(sendNav src/SyncSendNav.cpp)
+target_link_libraries(sendNav ${catkin_LIBRARIES})
+add_dependencies(SLAM_offline mini_generate_messages_cpp)
+

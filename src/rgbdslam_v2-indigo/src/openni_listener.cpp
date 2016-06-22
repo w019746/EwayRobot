@@ -776,6 +776,7 @@ void OpenNIListener::noCloudCameraCallback(cv::Mat visual_img,
   //######### Main Work: create new node ##############################################################
   //Q_EMIT setGUIStatus("Computing Keypoints and Features");
   Node* node_ptr = new Node(visual_img, depth, depth_mono8_img, cam_info, depth_header, detector_, extractor_);
+
   retrieveTransformations(depth_header, node_ptr);//Retrieve the transform between the lens and the base-link at capturing time;
   callProcessing(visual_img, node_ptr);
 }

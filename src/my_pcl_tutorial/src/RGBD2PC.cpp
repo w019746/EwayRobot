@@ -3,7 +3,7 @@
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
 #include <tf_conversions/tf_eigen.h>
-#include "mini/naviLoc.h"
+//#include "mini/naviLoc.h"
 // PCL specific includes
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -107,8 +107,6 @@ public:
 
 
 // static elements
-pcl::visualization::PCLVisualizer viewer ("Matrix transformation example");
-bool visualInitialed = false;
 ros::Publisher pub;
 RGBD rgbd_image;
 MyPointCloud myPointCloud("data/2015-08-27-21-11-17_pcd.pcd");
@@ -342,16 +340,17 @@ MyPointCloud::MyPointCloud(std::string s)
   init();
   loadPCD(s);
   boost::thread thrd1(boost::bind(&MyPointCloud::visualization,this));
-  //boost::thread thrd2(boost::bind(&MyPointCloud::icpStart,this));
+  boost::thread thrd2(boost::bind(&MyPointCloud::icpStart,this));
 }
 
 void MyPointCloud::visualization()
 {
+
   int count = 0;
 
   while (!initialized)
   {
-    std::cout << count++ << std::endl;
+    //std::cout << count++ << std::endl;
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
   }
 
@@ -367,9 +366,12 @@ void MyPointCloud::visualization()
   //downSamplePoints(cloud_view_all_ptr);
 
   Eigen::Matrix4f preTransform = Eigen::Matrix4f::Identity();
-
   Eigen::Matrix4f _transOffset, _transOdom, _transOdomFlag;
 
+
+  pcl::visualization::PCLVisualizer viewer ("Matrix transformation example");
+  bool visualInitialed = false;
+  viewer.initCameraParameters ();
   while (!viewer.wasStopped())
   {
 
@@ -402,9 +404,7 @@ void MyPointCloud::visualization()
       viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "original_cloud");
       viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "tranformed_cloud");
       visualInitialed = true;
-    }
-    
-    else
+    }else
     {
       if (!preLoadCloud)
         viewer.updatePointCloud (cloud_view_all_ptr, "original_cloud");
@@ -420,7 +420,7 @@ void MyPointCloud::visualization()
       viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "tranformed_cloud");
     }
     //std::cout << count++ << std::endl;
-    viewer.spinOnce ();
+    viewer.spinOnce (100);
   }
 }
 
@@ -679,6 +679,7 @@ void listeningTf()
     {
       boost::mutex::scoped_lock lock(io_mutex);
       myPointCloud.updateTrans(refineM);
+      //std::cout << "tf" << std::endl;
     }
     rate.sleep();
   }
@@ -707,31 +708,3 @@ int main(int argc, char** argv)
 
   return 0;
 }
-
-/*
-void callback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::ImageConstPtr& depth, 
-		const sensor_msgs::CameraInfoConstPtr& cam_info)  //回调中包含多个消息
-{
-  ROS_INFO("tmp");
-  FILE* fp = fopen("tmp_yyf.txt","w");
-  fclose(fp);
-}
-
-int main(int argc, char** argv)
-{
-  ros::init(argc, argv, "vision_node");
-
-  ros::NodeHandle nh;
-
-  message_filters::Subscriber<Image> image_sub(nh, "/camera/rgb/image_color", 10);             // topic1 输入
-  message_filters::Subscriber<Image> depth_sub(nh, "/camera/depth_registered/image_raw", 10);  
-  message_filters::Subscriber<CameraInfo> info_sub(nh, "/camera/rgb/camera_info", 10);
-  TimeSynchronizer<Image, Image, CameraInfo> sync(image_sub, depth_sub, info_sub, 10);       // 同步
-  sync.registerCallback(boost::bind(&callback, _1, _2, _3));                   // 回调
-
-  ROS_INFO("tmp");
-  ros::spin();
-
-  return 0;
-}*/
-
