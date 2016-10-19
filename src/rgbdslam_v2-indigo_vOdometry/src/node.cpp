@@ -1320,6 +1320,11 @@ MatchingResult Node::matchNodePair(const Node* older_node)
     } 
     else {//All good for feature based transformation estimation
         found_transformation = getRelativeTransformationTo(older_node,&mr.all_matches, mr.ransac_trafo, mr.rmse, mr.inlier_matches); 
+        tf::Transform tfTransDiff(this->getOdomTransform()*older_node->getOdomTransform().inverseTimes(g2o2TF(eigen2G2O(mr.ransac_trafo.cast<double>()))));
+        if(found_transformation && ((fabs(tfTransDiff.getOrigin().getX())>1 || fabs(tfTransDiff.getOrigin().getY())>1 || fabs(tfTransDiff.getOrigin().getZ())>1) && fabs(tfTransDiff.getRotation().getAngle())>0.6))
+        {
+            found_transformation = false;
+        }
         //Statistics
         float nn_ratio = 0.0;
         if(found_transformation){

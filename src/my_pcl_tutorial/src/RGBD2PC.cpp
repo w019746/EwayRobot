@@ -86,30 +86,33 @@ private:
   bool dataReceived;
 
   void downSamplePoints(pcl::PointCloud<PointType>::Ptr cloud_ptr, 
-                        const double& vx=0.02, const double& vy=0.02, const double& vz=0.02);
+                        const double& vx=0.05, const double& vy=0.05, const double& vz=0.05);
   void updateRGBAWithHeight(pcl::PointCloud<PointType>::Ptr cloud_ptr,
                         const double& max_height=1.2, const double& min_height = 0.0);
   void removeGroundPoints(pcl::PointCloud<PointType>::Ptr cloud_ptr,
-                        const double& min_z=0.1, const double& max_z=1.4);
+                        const double& min_z=-0.6, const double& max_z=1.0);
   void init();
-  void loadPCD(std::string s);
 public:
   MyPointCloud();
   MyPointCloud(std::string s);
+  void loadPCD(std::string s);
   void updateTrans(const double& x, const double& y, const double& theta);
   void updateTrans(const Eigen::Matrix4f& _trans);
   void updatePoints(pcl::PointCloud<PointType>::Ptr _cloud);
   void visualization();
   void icpStart();
   void icpProcess();
-
+  void processStart();
 };
 
 
 // static elements
 ros::Publisher pub;
 RGBD rgbd_image;
-MyPointCloud myPointCloud("data/2015-08-27-21-11-17_pcd.pcd");
+//MyPointCloud myPointCloud("data/2015-08-27-21-11-17_pcd.pcd");
+MyPointCloud myPointCloud;//("data/20160523/20160523.pcd");
+
+
 boost::mutex io_mutex;
 
 RGBD::RGBD()
@@ -328,19 +331,22 @@ void MyPointCloud::loadPCD(std::string s)
     std::cout <<"PCD Load Failed" << std::endl;
 }
 
+void MyPointCloud::processStart()
+{
+  boost::thread thrd1(boost::bind(&MyPointCloud::visualization,this));
+  boost::thread thrd2(boost::bind(&MyPointCloud::icpStart,this));
+}
+
+
 MyPointCloud::MyPointCloud()
 {
   init();
-  boost::thread thrd1(boost::bind(&MyPointCloud::visualization,this));
-  boost::thread thrd2(boost::bind(&MyPointCloud::icpStart,this));
 }
 
 MyPointCloud::MyPointCloud(std::string s)
 {
   init();
   loadPCD(s);
-  boost::thread thrd1(boost::bind(&MyPointCloud::visualization,this));
-  boost::thread thrd2(boost::bind(&MyPointCloud::icpStart,this));
 }
 
 void MyPointCloud::visualization()
@@ -598,8 +604,13 @@ void MyPointCloud::updatePoints(pcl::PointCloud<PointType>::Ptr _cloud)
   */
 }
 
-void init()
+void init(int argc, char** argv)
 {
+  if (argc>=2)
+  {
+    myPointCloud.loadPCD(argv[1]);
+  }
+  myPointCloud.processStart();
   //cv::namedWindow("tmp");
 }
 
@@ -641,6 +652,8 @@ void info_cb(const sensor_msgs::CameraInfoConstPtr& info_msg)
   //myPointCloud.updateTrans(msg->x,msg->y,msg->theta);
 //}
 
+bool tfInited = false;
+Eigen::Matrix4f initM;
 void listeningTf()
 {
   int count = 0;
@@ -669,16 +682,26 @@ void listeningTf()
     for (int i=0; i<4; i++)
       for (int j=0; j<4; j++)
         transEigenF(i,j) = transEigenD(i,j);
-    Eigen::Matrix4f refineM = transEigenF;
-    //refineM(0,0) = 0;
-    //refineM(0,1) = -1;
-    //refineM(1,0) = 1;
-    //refineM(1,1) = 0;
-    refineM(0,3) = transEigenF(1,3);
-    refineM(1,3) = -transEigenF(0,3);
+    Eigen::Matrix4f refinedM = transEigenF;
+    //refinedM(0,0) = 0;
+    //refinedM(0,1) = -1;
+    //refinedM(1,0) = 1;
+    //refinedM(1,1) = 0;
+    refinedM(0,3) = transEigenF(1,3);
+    refinedM(1,3) = -transEigenF(0,3);
+
+    if (!tfInited)
+    {
+      initM = refinedM;
+      tfInited = true;
+    }else
+    {
+      refinedM = initM.inverse() * refinedM;
+    }
+
     {
       boost::mutex::scoped_lock lock(io_mutex);
-      myPointCloud.updateTrans(refineM);
+      myPointCloud.updateTrans(refinedM);
       //std::cout << "tf" << std::endl;
     }
     rate.sleep();
@@ -687,10 +710,13 @@ void listeningTf()
 
 int main(int argc, char** argv)
 {
-  
-  init();
+  printf("%d\n", argc);
+  for (int i=0; i<argc; i++)
+    printf("%s\n", argv[i]);
 
-  ros::init(argc, argv, "vision_node");
+  init(argc, argv);
+
+  ros::init(argc, argv, "online_localization");
   ros::NodeHandle nh;
 
   // Create a ROS subscriber for the input point cloud

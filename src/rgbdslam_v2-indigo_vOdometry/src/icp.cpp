@@ -67,7 +67,7 @@ Eigen::Matrix4f icpAlignment(pointcloud_type::Ptr cloud_1, pointcloud_type::Ptr 
   // Set the max correspondence distance to 5cm (e.g., correspondences with higher distances will be ignored)
   icp->setMaxCorrespondenceDistance(0.05);
   // Set the maximum number of iterations (criterion 1)
-  icp->setMaximumIterations(50);
+  icp->setMaximumIterations(200);
   // Set the transformation epsilon (criterion 2)
   icp->setTransformationEpsilon(1e-8);
   // Set the euclidean distance difference epsilon (criterion 3)

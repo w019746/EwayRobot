@@ -113,12 +113,8 @@ include_directories(
 #   src/${PROJECT_NAME}/my_pcl_tutorial.cpp
 # )
 
-add_executable(example src/example.cpp)
-add_executable(example_planarsegmentation src/example_planarsegmentation.cpp)
 add_executable(RGBD2PC src/RGBD2PC.cpp)
 add_executable(infoSending src/infoSending.cpp)
-target_link_libraries(example ${catkin_LIBRARIES})
-target_link_libraries(example_planarsegmentation ${catkin_LIBRARIES})
 target_link_libraries(RGBD2PC ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${PCL_LIBRARIES})
 target_link_libraries(infoSending ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 

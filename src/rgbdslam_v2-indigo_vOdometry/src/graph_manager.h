@@ -48,7 +48,7 @@
 #include <memory> //for auto_ptr
 #include <utility>
 #include "parameter_server.h"
-// #define DO_LOOP_CLOSING
+//#define DO_LOOP_CLOSING
 // DO_FEATURE_OPTIMIZATION is set in CMakeLists.txt
 #ifdef DO_FEATURE_OPTIMIZATION
 #include "landmark.h"

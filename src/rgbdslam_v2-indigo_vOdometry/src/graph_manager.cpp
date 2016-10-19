@@ -386,7 +386,7 @@ void GraphManager::firstNode(Node* new_node)
     Q_EMIT setGUIInfo(message.sprintf("Added first node with %i keypoints to the graph", (int)new_node->feature_locations_2d_.size()));
     //pointcloud_type::Ptr the_pc(new_node->pc_col); //this would delete the cloud after the_pc gets out of scope
     QMatrix4x4 latest_transform = g2o2QMatrix(g2o_ref_se3);
-    if(!ParameterServer::instance()->get<bool>("glwidget_without_clouds")) { 
+    if(!ParameterServer::instance()->get<bool>("glwidget_without_clouds")) {
       Q_EMIT setPointCloud(new_node->pc_col.get(), latest_transform);
       Q_EMIT setFeatures(&(new_node->feature_locations_3d_));
     }
@@ -633,25 +633,42 @@ bool GraphManager::nodeComparisons(Node* new_node,
 
     //If no trafo is found, only keep if a parameter says so or odometry is available. 
     //Otherwise only add a constant position edge, if the predecessor wasn't matched and its timestamp is nearby
-    if((!found_trafo && valid_odometry) || 
+    if(valid_odometry || 
        ((!found_trafo && keep_anyway) || 
         (!predecessor_matched && time_delta_sec < 0.1))) //FIXME: Add parameter for constant position assumption and time_delta
     { 
-      LoadedEdge3D odom_edge;
+      Node* prev_frame = graph_[graph_.size()-1];
 
+      LoadedEdge3D odom_edge;
       odom_edge.id1 = sequentially_previous_id;
       odom_edge.id2 = new_node->id_;
-      odom_edge.transform.setIdentity();
+      if(!valid_odometry || sequentially_previous_id==0)
+          odom_edge.transform.setIdentity();
+      else
+      {
+        tf::Transform tfTransDiff(prev_frame->getOdomTransform()*new_node->getOdomTransform().inverse());
+        //FILE* fp = fopen("/home/xdh/catkin_ws/templog.txt","a");
+        //fprintf(fp,"%f,%f,%f,%f,%f,%f,%f\n",tfTransDiff.getOrigin().getX(),tfTransDiff.getOrigin().getY(),tfTransDiff.getOrigin().getZ(),tfTransDiff.getRotation().getAngle(),tfTransDiff.getRotation().getAxis().getX(),tfTransDiff.getRotation().getAxis().getY(),tfTransDiff.getRotation().getAxis().getZ());
+        //fclose(fp);
+        odom_edge.transform = tf2G2O(tfTransDiff);
+      }
       curr_motion_estimate = eigenTF2QMatrix(odom_edge.transform);
-      odom_edge.informationMatrix = Eigen::Matrix<double,6,6>::Zero(); 
-      ROS_WARN("No valid (sequential) transformation between %d and %d: Using constant position assumption.", odom_edge.id1, odom_edge.id2);
-      odom_edge.informationMatrix = Eigen::Matrix<double,6,6>::Identity() / time_delta_sec;//e-9; 
+
+      //ROS_WARN("No valid (sequential) transformation between %d and %d: Using constant position assumption.", odom_edge.id1, odom_edge.id2);
+      /*double infoCoeff = ParameterServer::instance()->get<double>("odometry_information_factor");
+      odom_edge.informationMatrix = Eigen::Matrix<double, 6, 6>::Ones(); //Do not influence optimization
+      odom_edge.informationMatrix = odom_edge.informationMatrix*0.001*infoCoeff;*/
+      odom_edge.informationMatrix = Eigen::Matrix<double,6,6>::Identity() / (time_delta_sec+0.1);//e-9;
       addEdgeToG2O(odom_edge,graph_[sequentially_previous_id],new_node, true,true, curr_motion_estimate);
       graph_[new_node->id_] = new_node; //Needs to be added
-      new_node->valid_tf_estimate_ = false; //Don't use for postprocessing, rendering etc
+	  if(valid_odometry)
+      	new_node->valid_tf_estimate_ = true; //Don't use for postprocessing, rendering etc
+	  else
+	  	new_node->valid_tf_estimate_ = false;
       MatchingResult mr;
       mr.edge = odom_edge;
       curr_best_result_ = mr;
+	  
     }
 
     return cam_cam_edges_.size() > num_edges_before;

@@ -776,7 +776,6 @@ void OpenNIListener::noCloudCameraCallback(cv::Mat visual_img,
   //######### Main Work: create new node ##############################################################
   //Q_EMIT setGUIStatus("Computing Keypoints and Features");
   Node* node_ptr = new Node(visual_img, depth, depth_mono8_img, cam_info, depth_header, detector_, extractor_);
-
   retrieveTransformations(depth_header, node_ptr);//Retrieve the transform between the lens and the base-link at capturing time;
   callProcessing(visual_img, node_ptr);
 }
@@ -823,7 +822,7 @@ void OpenNIListener::processNode(Node* new_node)
   Q_EMIT setGUIInfo2(QString("Frames processed: ")+QString::number(num_processed_));
 
   ///ODOMETRY
-  if(has_been_added && !ps->get<std::string>("odom_frame_name").empty()){
+  /*if(has_been_added && !ps->get<std::string>("odom_frame_name").empty()){
     ROS_INFO_NAMED("OpenNIListener", "Verifying Odometry Information");
     ros::Time latest_odom_time;
     std::string odom_frame  = ps->get<std::string>("odom_frame_name");
@@ -835,7 +834,7 @@ void OpenNIListener::processNode(Node* new_node)
     } else {
       ROS_WARN_STREAM("Couldn't get time of latest tf transform between " << odom_frame << " and " << base_frame << ": " << error_msg);
     }
-  }
+  }*/
 
 
   //######### Visualization code  #############################################

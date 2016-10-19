@@ -73,16 +73,18 @@ void FindFrameAndSendTF(const sensor_msgs::ImageConstPtr& color_image_msg)
 		  transform_w2v.setRotation(q);
 		  transform_w2v = transform_w2v.inverse();
 
+      cout << "send OK!" << endl;
       pbr->sendTransform(tf::StampedTransform(transform_w2v,ros_time, "/base_frame","/odom_frame"));
 		  pbr->sendTransform(tf::StampedTransform(transform_v2c,ros_time, "/camera_rgb_optical_frame","/base_frame"));
     }
   }
 }
+
 int main(int argc, char** argv)
 {
   initInfo();
   //read nav file
-  FILE* fp = fopen("/home/xdh/catkin_ws/nav_20160523_1.txt","r");
+  FILE* fp = fopen("data/20160523/nav_20160523_1.txt","r");
   vector<double> temp(4);  
   while(fscanf(fp,"%lf %lf %lf %lf",&temp[0], &temp[1], &temp[2], &temp[3])>0)
   {

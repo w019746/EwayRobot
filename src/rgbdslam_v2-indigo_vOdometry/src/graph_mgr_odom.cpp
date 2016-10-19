@@ -46,7 +46,7 @@ void createOdometryEdge(int id1, int id2, tf::Transform& odomTf, LoadedEdge3D& e
   var_theta = std::max(var_theta,var_theta_min);
 */  
  
- edge.transform = tf2G2O(odomTf);
+  edge.transform = tf2G2O(odomTf);
   edge.informationMatrix = Eigen::Matrix<double, 6, 6>::Ones(); //Do not influence optimization
   edge.informationMatrix = edge.informationMatrix*0.001*infoCoeff;
 
